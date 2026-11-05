@@ -1,9 +1,7 @@
 package com.hospital.hospital;
 
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,63 +11,111 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
-import tools.jackson.databind.json.JsonMapper;
-
-@RestController
-@RequestMapping("/nurse")
+@RestController // This means that this class is a Controller
+@RequestMapping("/nurse") // This means URL's start with /nurse
 public class NurseController {
 
-	private List<Nurse> nurses = new ArrayList<>();
+	private final NurseRepository nurseRepository;
 
-	// Constructor
-	public NurseController() {
-
-		try (InputStream inputStream = getClass().getResourceAsStream("/nurses.json")) {
-
-			JsonMapper objectMapper = JsonMapper.builder().build();
-
-			Nurse[] nursesArray = objectMapper.readValue(inputStream, Nurse[].class);
-
-			nurses = Arrays.asList(nursesArray);
-
-		} catch (Exception e) {
-
-			e.printStackTrace();
-
-		}
+	// Constructor: Spring gives us the repository
+	public NurseController(NurseRepository nurseRepository) {
+		this.nurseRepository = nurseRepository;
 	}
 
 	@PostMapping("/login")
 	public ResponseEntity<Boolean> login(@RequestBody Nurse inputNurse) {
-
-		boolean found = false;
-		for (Nurse n : nurses) {
-
-			if (n.getUser().equals(inputNurse.getUser()) && n.getPw().equals(inputNurse.getPw())) {
-				found = true;
-				break;
-			}
-		}
-		return ResponseEntity.status(found ? HttpStatus.OK : HttpStatus.UNAUTHORIZED).body(found);
-
+		
+        Optional<Nurse> nurse = nurseRepository.findByUsernameAndPassword(
+        		inputNurse.getUsername(),
+        		inputNurse.getPassword()
+        );
+ 
+        boolean found = nurse.isPresent();
+ 
+        
+        return ResponseEntity
+                .status(found ? HttpStatus.OK : HttpStatus.UNAUTHORIZED)
+                .body(found);
 	}
 
-	@GetMapping("/index")
-	public ResponseEntity<List<Nurse>> getAll() {
-		return ResponseEntity.ok(nurses);
-	}
+    // Get all nurses from the database
+    @GetMapping("/index")
+    public ResponseEntity<List<Nurse>> getAll() {
+        return ResponseEntity.ok(nurseRepository.findAll());
+    }
 
+	// Search for a nurse by name
 	@GetMapping("/name/{name}")
 	public ResponseEntity<Nurse> findByName(@PathVariable String name) {
-		for (Nurse nurse : nurses) {
-			if (nurse.getName().equalsIgnoreCase(name)) {
-				return ResponseEntity.ok(nurse);
-			}
+		Optional<Nurse> nurse = nurseRepository.findByName(name);
+
+		// Check if a nurse was found
+		if (nurse.isPresent()) {
+			return ResponseEntity.ok(nurse.get());
 		}
 
+		// Return 404 if the nurse does not exist
 		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-		
+
 	}
 
+//CRUD
+	
+	// CREATE: Create a new nurse
+	@PostMapping("/create")
+	public ResponseEntity<Nurse> create(@RequestBody Nurse nurse) {
+	    Nurse savedNurse = nurseRepository.save(nurse);
+
+	    return ResponseEntity.status(HttpStatus.CREATED).body(savedNurse);
+	}
+	
+	// READ: Find a nurse by ID
+	@GetMapping("/{id}")
+	public ResponseEntity<Nurse> findById(@PathVariable Integer id) {
+	    Optional<Nurse> nurse = nurseRepository.findById(id);
+
+	    if (nurse.isPresent()) {
+	        return ResponseEntity.ok(nurse.get());
+	    }
+
+	    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+	}
+	// UPDATE: Update a nurse by ID
+	@PutMapping("/update/{id}")
+	public ResponseEntity<Nurse> update(@PathVariable Integer id, @RequestBody Nurse inputNurse) {
+	    Optional<Nurse> nurse = nurseRepository.findById(id);
+
+	    if (nurse.isPresent()) {
+	        Nurse existingNurse = nurse.get();
+
+	        existingNurse.setUsername(inputNurse.getUsername());
+	        existingNurse.setPassword(inputNurse.getPassword());
+	        existingNurse.setName(inputNurse.getName());
+	        existingNurse.setSurname(inputNurse.getSurname());
+	        existingNurse.setEmail(inputNurse.getEmail());
+
+	        Nurse updatedNurse = nurseRepository.save(existingNurse);
+
+	        return ResponseEntity.ok(updatedNurse);
+	    }
+
+	    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+	}
+	
+	// DELETE: Delete a nurse by ID
+	@DeleteMapping("/delete/{id}")
+	public ResponseEntity<Nurse> delete(@PathVariable Integer id) {
+	    Optional<Nurse> nurse = nurseRepository.findById(id);
+
+	    if (nurse.isPresent()) {
+	        nurseRepository.deleteById(id);
+
+	        return ResponseEntity.ok(nurse.get());
+	    }
+
+	    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+	}
 }
